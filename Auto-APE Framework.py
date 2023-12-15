@@ -1,18 +1,20 @@
 # -*- coding: utf-8 -*-
 """
 Created on Wed Jun 21 09:26:18 2023
-自动化切换数据集，实现长时间自动化计算
-@author: 25304
+The data set is automatically switched to realize the automatic calculation of model evaluation and model recommendation.
+Input: A.csv file with labels in the first column and descriptors in the rest.
+Output A.csv file with Each model, and the parameters selected by the model, as well as the evaluation indicators and rankings of each model.
+@author: Administrator
 """
 
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split  #分配训练集与测试集
-from sklearn.model_selection import GridSearchCV    #网格搜索
-from sklearn.model_selection import cross_val_score #交叉验证
-import matplotlib.pyplot as plt   #画图
+from sklearn.model_selection import train_test_split  #Assign a training and test set
+from sklearn.model_selection import GridSearchCV    #Grid search
+from sklearn.model_selection import cross_val_score #Cross validation
+import matplotlib.pyplot as plt   #Drawing function
 from scipy.stats import pearsonr
 from sklearn.metrics import mean_squared_error
 from sklearn.metrics import median_absolute_error
@@ -47,7 +49,7 @@ from sklearn.model_selection import cross_val_predict
 from sklearn.metrics import mean_squared_log_error
 import pickle
 
-#全局参数
+#Global parameters
 random_state_forall = 420
 num_of_models = 15
 n_iter_forall = 100
@@ -58,49 +60,52 @@ name_of_models = ['lr','ridge','adb','bpnn','cbr',
 
 def Core(data):
     data = data.iloc[:,1:]
-    data.drop_duplicates(inplace=True)  #剔除重复的数据
+    data.drop_duplicates(inplace=True)  #Eliminate duplicate data
     data = data.reset_index(drop=True)
     x = data.iloc[:,1:]
     y = data.iloc[:,0]
 
 
-    #对特征进行归一化，避免数据量级对结果的影响，此处目标y不进行归一化
+    #The features are normalized to avoid the influence of data magnitude on the results, 
+    #and the target y is not normalized here
     max_x = x.max()
     min_x = x.min()
     x = (x - min_x) / (max_x - min_x)
     # max_y = y.max()
     # min_y = y.min()
     # y = (y - min_y) / (max_y - min_y)
+    
+    #Delete the Nan column, directly delete all Nan columns, if not delete, 
+    #the correlation coefficient screening model will not pass.
+    x.dropna (axis=1, how='all', inplace=True) 
+    x.fillna(0, inplace=True) #Replace the remaining Nans with zeros
 
-    x.dropna (axis=1, how='all', inplace=True) #删除含Nan的列,直接删除全为Nan的列，如果不删，后面相关系数筛选模型会没有模型通过
-    x.fillna(0, inplace=True) #将剩下的Nan替换为0，
-
-    ###七三、八二分训练集和测试集######
+    ###70% training set and 30% test set######
     from sklearn.model_selection import train_test_split
     Xtrain,Xtest,Ytrain,Ytest = train_test_split(x,y,test_size=0.3,random_state=random_state_forall)
     
     def float_range(start, stop, step):
-        ''' 支持 float 的步进函数
+        ''' Support for float stepper functions
     
-            输入 Input:
-                start (float)  : 计数从 start 开始。默认是从 0 开始。
-                end   (float)  : 计数到 stop 结束，但不包括 stop。
-                step (float)  : 步长，默认为 1，如为浮点数，参照 steps 小数位数。
+             Input:
+                start (float)  : The count starts at start. The default is to start at 0.
+                end   (float)  : The count ends up to stop, but does not include stop.
+                step (float)  : Step size, default 1, for floating-point numbers, refer to steps for decimal places.
     
-            输出 Output:
+             Output:
                 浮点数列表
     
-            例子 Example:
+             Example:
                 >>> print(float_range(3.612, 5.78, 0.22))
                 [3.612, 3.832, 4.052, 4.272, 4.492, 4.712, 4.932, 5.152, 5.372]
         '''
-        start_digit = len(str(start))-1-str(start).index(".") # 取开始参数小数位数
-        stop_digit = len(str(stop))-1-str(stop).index(".")    # 取结束参数小数位数
-        step_digit = len(str(step))-1-str(step).index(".")    # 取步进参数小数位数
-        digit = max(start_digit, stop_digit, step_digit)      # 取小数位最大值
+        start_digit = len(str(start))-1-str(start).index(".") # Take the number of decimal places of the start parameter
+        stop_digit = len(str(stop))-1-str(stop).index(".")    # Take the number of decimal places of the end parameter
+        step_digit = len(str(step))-1-str(step).index(".")    # Take the decimal number of the step parameter
+        digit = max(start_digit, stop_digit, step_digit)      # Take the maximum number of decimal places
         return [(start*10**digit+i*step*10**digit)/10**digit for i in range(int((stop-start)//step))]
     
-    
+    #Model initialization
     lr = LR()
     ridge = Ridge()
     svr = svm.SVR()
@@ -117,6 +122,8 @@ def Core(data):
     br = BR()
     
     
+    #The selected model and parameter selection, the selection of parameters after multiple data verification,
+    #while improving efficiency to ensure that the model can achieve the optimal.
     ###
     lr_grid_param = { 
                     'positive': [True, False],
@@ -232,14 +239,14 @@ def Core(data):
     br_Bayes = BayesSearchCV(br , br_grid_param , n_iter=n_iter_forall , random_state = random_state_forall)
     br_Bayes.fit(Xtrain,Ytrain)
     
-    print("参数择优完毕")
-    #####建模#######
+    print("Parameter selection is completed")
+    #####Modeling#######
     lr = LR(
             **lr_Bayes.best_params_
-        ).fit(Xtrain, Ytrain)#线性回归
+        ).fit(Xtrain, Ytrain)#Linear regression
     ridge = Ridge(
         **ridge_Bayes.best_params_
-        ).fit(Xtrain,Ytrain)#岭回归
+        ).fit(Xtrain,Ytrain)#Ridge regression
     
     adb = ADBR(
         **adb_Bayes.best_params_
@@ -247,23 +254,23 @@ def Core(data):
     
     bpnn = MLPRegressor(
         **bpnn_Grid.best_params_
-                        ).fit(Xtrain,Ytrain)#多层感知机
+                        ).fit(Xtrain,Ytrain)#Multilayer perceptron
     cbr = CTBR(
         # **cbr_Bayes.best_params_
         **cbr_Grid.best_params_
                ).fit(Xtrain,Ytrain)#CatBoost
     etr = ETR(
         **etr_Bayes.best_params_
-              ).fit(Xtrain,Ytrain)#极端随机树
+              ).fit(Xtrain,Ytrain)#Extremely random tree
     lgb = LGBR( 
         **lgb_Bayes.best_params_
                ).fit(Xtrain,Ytrain)#LightGBM
     rfr = RFR(
         **rfr_Bayes.best_params_
-        ).fit(Xtrain,Ytrain)#随机森林
+        ).fit(Xtrain,Ytrain)#Random forest
     svr = svm.SVR(
         **svr_Bayes.best_params_
-        ).fit(Xtrain,Ytrain)#支持向量机
+        ).fit(Xtrain,Ytrain)#Support vector machine
     xgb = XGBR(
         **xgb_Bayes.best_params_
         ).fit(Xtrain,Ytrain)#XGBoost
@@ -272,10 +279,10 @@ def Core(data):
         ).fit(Xtrain,Ytrain)#Lasso
     dtr = DTR(
         **dtr_Bayes.best_params_
-        ).fit(Xtrain,Ytrain)#决策树回归
+        ).fit(Xtrain,Ytrain)#Decision tree regression
     gbr = GBR(
         **gbr_Bayes.best_params_
-        ).fit(Xtrain,Ytrain)#梯度提升
+        ).fit(Xtrain,Ytrain)#Gradient boosting
     br = BR(
         **br_Bayes.best_params_
         ).fit(Xtrain,Ytrain)#Bagging
@@ -299,7 +306,7 @@ def Core(data):
     models.append(br)
     
     
-    #预测
+    #Forecasting
     yhat_lr = lr.predict(Xtest)
     yhat_ridge = ridge.predict(Xtest)
     yhat_adb = adb.predict(Xtest)
@@ -329,7 +336,7 @@ def Core(data):
                    ]
     acc_data = []
     for i in range(len(model_pass_check_list)):
-        #模型准确度
+        #Model accuracy
         model_evaluations = []
         model_evaluations.append(model_pass_check_list[i].score(Xtest,Ytest))
         model_evaluations.append(mean_squared_error(Ytest,model_pass_check_list[i].predict(Xtest))**0.5)
@@ -337,7 +344,7 @@ def Core(data):
         model_evaluations.append(median_absolute_error(Ytest,model_pass_check_list[i].predict(Xtest)))
         model_evaluations.append(mean_absolute_error(Ytest,model_pass_check_list[i].predict(Xtest)))
         model_evaluations.append(explained_variance_score(Ytest,model_pass_check_list[i].predict(Xtest))) 
-        #模型稳定性
+        #Model stability
         model_evaluations.append(cross_val_score(model_pass_check_list[i],x,y,cv=10).mean())
         model_evaluations.append(-(-(cross_val_score(model_pass_check_list[i],x,y,cv=10
                                                   ,scoring = "neg_mean_squared_error").mean()))**0.5)
@@ -351,13 +358,13 @@ def Core(data):
                                                   ,scoring = "neg_mean_absolute_error").mean())
         model_evaluations.append(cross_val_score(model_pass_check_list[i],x,y,cv=10
                                                   ,scoring = "explained_variance").mean())
-        #导入评价标准矩阵
+        #Import the evaluation criteria matrix
         acc_data.append(model_evaluations)
-    #转化为DataFrame格式
+    #Convert to DataFrame format
     acc_df = pd.DataFrame(acc_data,index=model_pass_check_list,columns=evaluations,dtype=float)
 
 
-    #模型排序
+    #Model ranking
     sort_name_list = ["R2_sort",'RMSE_sort','MSLE_sort','MEDAE_sort','MAE_sort','EVS_sort'
                        ,'10kf_R2_sort','10kf_RMSE_sort','10kf_MSLE_sort','10kf_MEDAE_sort','10kf_MAE_sort','10kf_EVS_sort'
                       ]
@@ -369,9 +376,9 @@ def Core(data):
         else:    
             sort_index.reverse()
             acc_df[sort_name_list[i]]=sort_index
-    #总的排序
+    #Total sorting
     acc_df['sort_score'] = acc_df.iloc[:,18:].sum(axis=1)
-    #按评分排序，模型越好越靠前
+    #The better the model, the better the model
     acc_df.sort_values(by='sort_score', inplace=True, ascending=True)
     
     return acc_df,models
@@ -384,11 +391,11 @@ import os
 import joblib
 import shutil
 
-# 假设你的数据集文件夹名称为datasets
+# Let's say your dataset folder name is datasets
 dataset_folder = "datasets"
-output_folder = "results"  # 用于保存结果的文件夹名称
+output_folder = "results"  # The name of the folder to use to save the results
 
-# 检查结果文件夹是否存在，如果不存在则创建
+# Check if the results folder exists and create it if not
 if not os.path.exists(output_folder):
     os.makedirs(output_folder)
 
@@ -396,33 +403,33 @@ name_of_models = ['lr','ridge','adb','bpnn','cbr',
                   'etr','lgb','rfr','svr','xgb',
                   'lasso','dtr','gbr','br']
 
-# 遍历数据集文件夹中的文件
+# Iterate over the files in the dataset folder
 for filename in os.listdir(dataset_folder):
     if filename.endswith(".csv"):
-        dataset_name = os.path.splitext(filename)[0]  # 提取文件名（不包含扩展名）作为数据集名称
+        dataset_name = os.path.splitext(filename)[0]  # Extract the filename (without the extension) as the dataset name
 
-        dataset_path = os.path.join(dataset_folder, filename)  # 构建数据集文件的完整路径
-        output_dataset_folder = os.path.join(output_folder, dataset_name)  # 构建结果文件夹的完整路径
+        dataset_path = os.path.join(dataset_folder, filename)  # Build the full path to the dataset file
+        output_dataset_folder = os.path.join(output_folder, dataset_name)  # Build the full path to the results folder
 
-        # 检查结果文件夹是否存在，如果不存在则创建
+        # Check if the results folder exists and create it if not
         if not os.path.exists(output_dataset_folder):
             os.makedirs(output_dataset_folder)
 
-        data = pd.read_csv(dataset_path)  # 读取数据集为 DataFrame
-        # 在此处调用 core() 函数进行计算，将结果保存到结果文件夹中
+        data = pd.read_csv(dataset_path)  # Read the dataset as a DataFrame
+        # Here the core() function is called to perform the calculation and save the results to the results folder
         result = Core(data)
         acc_df, models = result
 
-        # 将评价指标保存为CSV文件
+        # Save the evaluation metrics as CSV files
         acc_csv_filename = os.path.join(output_dataset_folder, "modelAcc.csv")
         acc_df.to_csv(acc_csv_filename)
 
-        save_directory = os.path.join(output_dataset_folder, "models")  # 模型保存的文件夹名称
-        # 检查目录是否存在，如果不存在则创建
+        save_directory = os.path.join(output_dataset_folder, "models")  # The name of the folder where the model is saved
+        # Check if the directory exists and create it if not
         if not os.path.exists(save_directory):
             os.makedirs(save_directory)
 
-        # 遍历模型列表并保存为pickle文件
+        # The list of models is traversed and saved as a pickle file
         for name, model in zip(name_of_models,models):
             model_name = f'model_{name}.pickle'
             model_path = os.path.join(save_directory, model_name)
@@ -434,11 +441,11 @@ for filename in os.listdir(dataset_folder):
         
         print("模型保存完成。")
 
-        # 将评价指标CSV文件复制到模型文件夹中
+        # Copy the metrics CSV file to the models folder
         acc_csv_destination = os.path.join(save_directory, "modelAcc.csv")
         shutil.copyfile(acc_csv_filename, acc_csv_destination)
         print(f"复制评价指标文件到 {acc_csv_destination} 完成")
 
-        # 将测试数据集保存为CSV文件
+        # Save the test dataset as a CSV file
         data_filename = os.path.join(output_dataset_folder, filename)
         data.to_csv(data_filename)
