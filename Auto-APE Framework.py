@@ -93,7 +93,7 @@ def Core(data):
                 step (float)  : Step size, default 1, for floating-point numbers, refer to steps for decimal places.
     
              Output:
-                浮点数列表
+                A list of floating point numbers
     
              Example:
                 >>> print(float_range(3.612, 5.78, 0.22))
@@ -437,14 +437,14 @@ for filename in os.listdir(dataset_folder):
             with open(model_path, 'wb') as model_file:
                 pickle.dump(model, model_file)
             
-            print(f"保存模型 {model_name}")
+            print(f"save model {model_name}")
         
-        print("模型保存完成。")
+        print("Model saved")
 
         # Copy the metrics CSV file to the models folder
         acc_csv_destination = os.path.join(save_directory, "modelAcc.csv")
         shutil.copyfile(acc_csv_filename, acc_csv_destination)
-        print(f"复制评价指标文件到 {acc_csv_destination} 完成")
+        print(f"Copy the evaluation metrics file to {acc_csv_destination} Done")
 
         # Save the test dataset as a CSV file
         data_filename = os.path.join(output_dataset_folder, filename)
